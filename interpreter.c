@@ -106,6 +106,10 @@ Value *eval(Value *tree, Frame *frame)
             return(result);
         }
 
+        if (!strcmp(first->s,"quote")) {
+            return(args);
+        }
+
         if (car(car(first)) != NULL) { // handles cons-cells maping to cons-cells
           Value* tree1 = talloc(sizeof(Value));
           Value* tree2 = talloc(sizeof(Value));
