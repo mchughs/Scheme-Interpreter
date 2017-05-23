@@ -88,6 +88,9 @@ void syntaxError_2()
 // Racket code; use parentheses to indicate subtrees.
 void printTree(Value *tree)
 {
+  if (tree->type == VOID_TYPE){
+    return;
+  }
   if (tree->type != CONS_TYPE) {
     displayValue(tree);
   } else {
