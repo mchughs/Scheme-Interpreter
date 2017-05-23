@@ -1,0 +1,6 @@
+(define ifTest
+  (lambda (bool a b)
+    (if bool a b)))
+
+(ifTest #t "dogs" "cats")
+;;tests 3 parameter function

@@ -1,0 +1,16 @@
+(define not
+  (lambda (bool)
+    (if bool #f #t)))
+
+(define id
+  (lambda (bool)
+    (if bool #t #f)))
+
+(define test2
+  (lambda (bool1 bool2)
+      (if bool1 (id bool2) (not bool2))))
+
+(not #f)
+(id #t)
+(test2 #t #t)
+;; tests functions called from within other functions

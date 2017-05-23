@@ -1,0 +1,2 @@
+(define not (lambda (bool )(if bool #f #t )))(not #t )-->
+#f

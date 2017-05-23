@@ -1,0 +1,7 @@
+(define not
+  (lambda (bool)
+    (if bool #f #t)))
+
+(not #t)
+
+;; test simple define,lambda, and function call

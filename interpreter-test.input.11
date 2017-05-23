@@ -1,0 +1,2 @@
+(lambda (bool) (if bool #f #t))
+;;Should print blank

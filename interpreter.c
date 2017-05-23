@@ -26,7 +26,7 @@ void interpret(Value *tree)
 { // sets up global frame
   topFrame = talloc(sizeof(Frame));
   topFrame->parent = NULL;
-  topFrame->bindings = NULL;
+  topFrame->bindings = makeNull();
 
   printTree(tree); // Prints parse tree for comparison
   printf("--> \n");
@@ -47,8 +47,6 @@ void interpret(Value *tree)
     }
     tree = cdr(tree);
   }
-
-  printf("\n"); // prints newline to maintain unix file standard
 
   return;
 }
@@ -154,12 +152,9 @@ Value* lookUpSymbol(Value* tree, Frame* frame)
   while (true) { // increment through the frames
 
     Value* temp_bindings = talloc(sizeof(Value));
-
-    // printf("%i type \n", frame->bindings->type);
     temp_bindings = frame->bindings;
 
     while (temp_bindings->type != NULL_TYPE) { // increment through the list of bindings
-
       Value* val = talloc(sizeof(Value));
       char* var = talloc(sizeof(char));
       Value* var_val = talloc(sizeof(Value));
@@ -228,7 +223,7 @@ Value* evalLet(Value* args, Frame* frame)
     bindings = cdr(bindings);
   }
 
-  new_frame->bindings = bindingsList; // FLAG
+  new_frame->bindings = bindingsList;
 
   Value* tree = talloc(sizeof(Value));
   tree = eval(body, new_frame);
@@ -271,8 +266,8 @@ void evalDefine(Value* args, Frame* frame)
     Value* val = talloc(sizeof(Value));
     Value* var_val = talloc(sizeof(Value));
 
-    var = car(args);
-    val = eval(car(cdr(args)), frame);
+    var = car(args); // name of the thing being defined
+    val = eval(car(cdr(args)), frame); // value associated to the name
     var_val = cons(var,val);
     topFrame->bindings = cons(var_val, topFrame->bindings);
   }
@@ -311,7 +306,7 @@ Value* evalEach(Value* args, Frame* frame)
     args = cdr(args);
     tree = cons(val, tree);
   }
-  return(reverse(tree)); //FLAG
+  return(reverse(tree));
 }
 
 
@@ -326,6 +321,7 @@ Value* apply (Value* function, Value* args)
   frame->parent = function->cl.frame;
   Value* curr = talloc(sizeof(Value));
   curr = function->cl.paramNames;
+  frame->bindings = makeNull();
 
   while ((curr)->type != NULL_TYPE) {
     Value* binding = talloc(sizeof(Value));
