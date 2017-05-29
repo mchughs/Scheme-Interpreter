@@ -17,6 +17,12 @@ void   evalDefine  (Value* args, Frame* frame);
 Value* evalLambda  (Value* args, Frame* frame);
 Value* evalEach    (Value* args, Frame* frame);
 Value* apply       (Value* function, Value* args);
+void bind(char *name, Value *(*function)(struct Value *), Frame *frame);
+Value *primitiveAdd(Value *args);
+Value *primitiveNull(Value *args);
+Value *primitiveCar(Value *args);
+Value *primitiveCdr(Value *args);
+Value *primitiveCons(Value *args);
 
 void evaluationError();
 
@@ -28,23 +34,24 @@ void interpret(Value *tree)
   topFrame->parent = NULL;
   topFrame->bindings = makeNull();
 
-  printTree(tree); // Prints parse tree for comparison
-  printf("--> \n");
+  bind("+"    ,primitiveAdd ,topFrame);
+  bind("null?",primitiveNull,topFrame);
+  bind("car"  ,primitiveCar ,topFrame);
+  bind("cdr"  ,primitiveCdr ,topFrame);
+  bind("cons" ,primitiveCons,topFrame);
 
+  /*
+  printInput(tree); // Prints parse tree for comparison //flag
+  printf("--> \n");
+  */
+  
   Value* evaluated_tree = talloc(sizeof(Value));
   // Increments through and evaluates every S-exp
   while (tree->type != NULL_TYPE) {
     evaluated_tree = eval(car(tree), topFrame);
     printTree(evaluated_tree);
     // to print the proper spacing
-    if (evaluated_tree->type == INT_TYPE ||
-        evaluated_tree->type == BOOL_TYPE ||
-        evaluated_tree->type == STR_TYPE ||
-        evaluated_tree->type == DOUBLE_TYPE ||
-        evaluated_tree->type == SYMBOL_TYPE
-    ) {
-      printf("\n");
-    }
+    printf("\n");
     tree = cdr(tree);
   }
 
@@ -101,6 +108,10 @@ Value *eval(Value *tree, Frame *frame)
         return lookUpSymbol(tree, frame); // call helper
         break;
      }
+     case PRIMITIVE_TYPE: {
+       printf("NOT sure yet\n");
+       break;
+     }
      case CONS_TYPE: {
         Value *first = car(tree);
         Value *args = cdr(tree);
@@ -116,7 +127,12 @@ Value *eval(Value *tree, Frame *frame)
         }
 
         else if (!strcmp(first->s,"quote")) {
-            return(args);
+            if (length(args) == 1) {
+              return(args);
+            } else {
+              printf("quote given too many/few arguments\n");
+              evaluationError();
+            }
         }
 
         else if (!strcmp(first->s,"define")) {
@@ -312,28 +328,200 @@ Value* evalEach(Value* args, Frame* frame)
 
 Value* apply (Value* function, Value* args)
 {
-  if (length(args) != length(function->cl.paramNames)) {
-    printf("# of requested params != # of passed in args\n");
+  if (function->type == CLOSURE_TYPE) {
+
+    if (length(args) != length(function->cl.paramNames)) {
+      printf("# of requested params != # of passed in args\n");
+      evaluationError();
+    }
+
+    Frame* frame = talloc(sizeof(Frame));
+    frame->parent = function->cl.frame;
+    Value* curr = talloc(sizeof(Value));
+    curr = function->cl.paramNames;
+    frame->bindings = makeNull();
+
+    while ((curr)->type != NULL_TYPE) {
+      Value* binding = talloc(sizeof(Value));
+      binding = cons(car(curr), car(args)); //args pre-evaluated already
+      frame->bindings = cons(binding, frame->bindings);
+      curr = cdr(curr);
+      args = cdr(args);
+    }
+
+    Value* tree = talloc(sizeof(tree));
+    tree = eval(function->cl.functionCode, frame);
+    return(tree);
+
+  } else {
+    return((function->pf)(args));
+  }
+}
+
+
+void bind(char *name, Value *(*function)(struct Value *), Frame *frame) {
+    // Add primitive functions to top-level bindings list
+    Value *value = talloc(sizeof(Value));
+    Value* var_val = talloc(sizeof(Value));
+    Value* wrapper = talloc(sizeof(Value));
+
+    value->type = PRIMITIVE_TYPE;
+    value->pf = function;
+
+    wrapper->type = SYMBOL_TYPE;
+    wrapper->s = name;
+
+    var_val = cons(wrapper, value);
+
+    frame->bindings = cons(var_val, frame->bindings);
+}
+
+
+Value *primitiveAdd(Value *args)
+{
+   // check that args has length 2 and car(args), car(cdr(args)) args are numerical
+   if (length(args) == 2) {
+     Value* result = talloc(sizeof(Value));
+     int int1;
+     int int2;
+     int intsum;
+     double d1;
+     double d2;
+     double dsum;
+
+     if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+       int1 = car(args)->i;
+       int2 = car(cdr(args))->i;
+       intsum = int1 + int2;
+       result->type = INT_TYPE;
+       result->i =  intsum;
+       return (result);
+     } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+         int1 = car(args)->i;
+         d2 = car(cdr(args))->d;
+         dsum = int1 + d2;
+         result->type = DOUBLE_TYPE;
+         result->d = dsum;
+         return (result);
+     } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+         d1 = car(args)->d;
+         int2 = car(cdr(args))->i;
+         dsum = d1 + int2;
+         result->type = DOUBLE_TYPE;
+         result->d = dsum;
+         return (result);
+     } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+         d1 = car(args)->d;
+         d2 = car(cdr(args))->d;
+         dsum = d1 + d2;
+         result->type = DOUBLE_TYPE;
+         result->d = dsum;
+         return(result);
+     } else {
+       printf("+ function not given numbers\n");
+       evaluationError();
+     }
+   } else {
+     printf("+ function not given 2 arguments to add\n");
+     evaluationError();
+   }
+   return(args); //error if this step is reached
+}
+
+Value *primitiveNull(Value *args)
+{
+  if (args->type != CONS_TYPE) {
+    printf("null? not passed a list\n");
+    evaluationError();
+  } else {
+    Value* result = talloc(sizeof(Value));
+    result->type = BOOL_TYPE;
+    while (args->type == CONS_TYPE){
+      if ((car(args)->type == NULL_TYPE && length(args) == 1) || (car(car(args))->type == NULL_TYPE && length(args) == 1)) { //null? should return true
+        result->i = 1;
+        return(result);
+      }
+      args = cdr(args);
+    }
+    result->i = 0;
+    return(result);
+  }
+  return(args); //error if this step is reached
+}
+
+
+Value *primitiveCar(Value *args)
+{
+  if (args->type == CONS_TYPE) {
+    if (car(args)->type == CONS_TYPE) {
+      if (car(car(args))->type == CONS_TYPE && car(car(car(args)))->type != CONS_TYPE) {
+          return(car(car(car(args))));
+      } else if (car(car(args))->type == CONS_TYPE && car(car(car(args)))->type == CONS_TYPE) {
+        Value *wrapper = talloc(sizeof(Value));
+        wrapper = makeNull();
+        wrapper = cons(car(car(car(args))), wrapper);
+        return(wrapper);
+      }
+    }
+  }
+  printf("car args not a list/ is a null list\n");
+  evaluationError();
+  return(args); //error if this step is reached
+}
+
+
+Value *primitiveCdr(Value *args)
+{
+  if (args->type == CONS_TYPE) {
+    if (car(args)->type == CONS_TYPE && car(car(args))->type != NULL_TYPE) {
+      if (car(car(args))->type == CONS_TYPE && cdr(car(car(args)))->type != CONS_TYPE) {
+        return(cdr(car(car(args))));
+      } else if (car(car(args))->type == CONS_TYPE && cdr(car(car(args)))->type == CONS_TYPE) {
+        Value *wrapper = talloc(sizeof(Value));
+        wrapper = makeNull();
+        wrapper = cons(cdr(car(car(args))), wrapper);
+        return(wrapper);
+      } else {
+        Value* null = talloc(sizeof(Value));
+        null->type = NULL_TYPE;
+        return(null);
+      }
+    }
+  }
+  printf("cdr args not a list/ is a null list\n");
+  evaluationError();
+  return(args); //error if this step is reached
+}
+
+
+Value *primitiveCons(Value *args)
+{
+  if (length(args) == 2) {
+    Value* consCell = talloc(sizeof(Value));
+    Value* wrapper  = talloc(sizeof(Value));
+    Value* a = car(args);
+    Value* b = car(cdr(args));
+
+    //remove useless layers
+    while (a->type == CONS_TYPE && cdr(a)->type == NULL_TYPE) {
+      a = car(a);
+    }
+    while (b->type == CONS_TYPE && cdr(b)->type == NULL_TYPE) {
+      b = car(b);
+    }
+
+    wrapper = makeNull();
+    consCell = makeNull();
+    consCell = cons(b, consCell);
+    consCell = cons(a, consCell);
+    consCell = cons(consCell, wrapper);
+
+    return(consCell);
+  } else {
+    printf("Given more/less than 2 arguments for cons\n");
     evaluationError();
   }
-
-  Frame* frame = talloc(sizeof(Frame));
-  frame->parent = function->cl.frame;
-  Value* curr = talloc(sizeof(Value));
-  curr = function->cl.paramNames;
-  frame->bindings = makeNull();
-
-  while ((curr)->type != NULL_TYPE) {
-    Value* binding = talloc(sizeof(Value));
-    binding = cons(car(curr), car(args)); //args pre-evaluated already
-    frame->bindings = cons(binding, frame->bindings);
-    curr = cdr(curr);
-    args = cdr(args);
-  }
-
-  Value* tree = talloc(sizeof(tree));
-  tree = eval(function->cl.functionCode, frame);
-  return(tree);
+  return(args); //error if this step is reached
 }
 
 

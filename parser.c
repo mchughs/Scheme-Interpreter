@@ -10,6 +10,8 @@ Value* addToParseTree(Value* tree, int* depth, Value* token);
 void displayValue(Value *list);
 void syntaxError_1();
 void syntaxError_2();
+void printInput(Value *tree);
+void printTree(Value *tree);
 
 // Takes a list of tokens from a Racket program, and returns a pointer to a
 // parse tree representing that program.
@@ -84,9 +86,10 @@ void syntaxError_2()
   return;
 }
 
+
 // Prints the tree to the screen in a readable fashion. It should look just like
 // Racket code; use parentheses to indicate subtrees.
-void printTree(Value *tree)
+void printInput(Value *tree)
 {
   if (tree->type == VOID_TYPE){
     return;
@@ -97,6 +100,31 @@ void printTree(Value *tree)
     while (tree->type != NULL_TYPE) {
       if(car(tree)->type != CONS_TYPE) {
         displayValue(car(tree)); // display the value of the cell
+      } else {
+        printf("(");
+        printInput(car(tree)); // recursively print from perspective of the nested list
+        printf(")");
+      }
+      tree = cdr(tree);
+    }
+  }
+  return;
+}
+
+void printTree(Value *tree)
+{
+  if (tree->type == VOID_TYPE){
+    return;
+  }
+  if (tree->type != CONS_TYPE) {
+    displayValue(tree);
+  } else {
+    while (tree->type != NULL_TYPE) {
+      if (car(tree)->type != CONS_TYPE) {
+        displayValue(car(tree)); // display the value of the cell
+        if (cdr(tree)->type != NULL_TYPE && cdr(cdr(tree))->type == NULL_TYPE) {
+          printf(". ");
+        }
       } else {
         printf("(");
         printTree(car(tree)); // recursively print from perspective of the nested list
@@ -145,8 +173,7 @@ void displayValue(Value *list)
       display((list->c).cdr);
       break;
   case NULL_TYPE:
-      printf("FLAG\n");
-      printf("null\n");
+      printf("() ");
       break;
   case PTR_TYPE:
       printf("FLAG\n");
