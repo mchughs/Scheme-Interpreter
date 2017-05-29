@@ -41,10 +41,10 @@ void interpret(Value *tree)
   bind("cdr"  ,primitiveCdr ,topFrame);
   bind("cons" ,primitiveCons,topFrame);
 
-
+/*
   printInput(tree); // Prints parse tree for comparison //flag
   printf("--> \n");
-
+*/
 
   Value* evaluated_tree = talloc(sizeof(Value));
   // Increments through and evaluates every S-exp
@@ -257,6 +257,14 @@ Value* evalLet(Value* args, Frame* frame)
 
 Value* evalLetStar (Value* args, Frame* frame)
 {
+  Value* result = talloc(sizeof(Value));
+  while (args->type != NULL_TYPE) {
+    Frame* new_frame = talloc(sizeof(Frame));
+    new_frame->parent = frame;
+    result = evalLet(args, new_frame);
+    frame = new_frame;
+    args = cdr(args);
+  }
   return(args);
 }
 

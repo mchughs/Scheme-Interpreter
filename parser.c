@@ -126,7 +126,7 @@ void printTree(Value *tree)
         if (cdr(tree)->type != NULL_TYPE && cdr(cdr(tree))->type == NULL_TYPE) {
           printf(". ");
         }
-        
+
       } else {
         printf("(");
         printTree(car(tree)); // recursively print from perspective of the nested list
