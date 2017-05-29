@@ -122,9 +122,11 @@ void printTree(Value *tree)
     while (tree->type != NULL_TYPE) {
       if (car(tree)->type != CONS_TYPE) {
         displayValue(car(tree)); // display the value of the cell
+
         if (cdr(tree)->type != NULL_TYPE && cdr(cdr(tree))->type == NULL_TYPE) {
           printf(". ");
         }
+        
       } else {
         printf("(");
         printTree(car(tree)); // recursively print from perspective of the nested list

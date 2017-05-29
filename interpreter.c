@@ -15,6 +15,7 @@ Value* evalIf      (Value* args, Frame* frame);
 Value* evalLet     (Value* args, Frame* frame);
 void   evalDefine  (Value* args, Frame* frame);
 Value* evalLambda  (Value* args, Frame* frame);
+Value* evalLetStar (Value* args, Frame* frame);
 Value* evalEach    (Value* args, Frame* frame);
 Value* apply       (Value* function, Value* args);
 void bind(char *name, Value *(*function)(struct Value *), Frame *frame);
@@ -40,11 +41,11 @@ void interpret(Value *tree)
   bind("cdr"  ,primitiveCdr ,topFrame);
   bind("cons" ,primitiveCons,topFrame);
 
-  /*
+
   printInput(tree); // Prints parse tree for comparison //flag
   printf("--> \n");
-  */
-  
+
+
   Value* evaluated_tree = talloc(sizeof(Value));
   // Increments through and evaluates every S-exp
   while (tree->type != NULL_TYPE) {
@@ -146,6 +147,12 @@ Value *eval(Value *tree, Frame *frame)
             return(result);
         }
 
+        else if (!strcmp(first->s,"let*")) {
+            Value* result = evalLetStar(args,frame); // call helper
+            return(result);
+        }
+
+
         else {
            // If not a special form, evaluate the first, evaluate the args, then
            // apply the first to the args.
@@ -245,6 +252,12 @@ Value* evalLet(Value* args, Frame* frame)
   tree = eval(body, new_frame);
 
   return(tree); // return the evaluation of the body given the new_frame
+}
+
+
+Value* evalLetStar (Value* args, Frame* frame)
+{
+  return(args);
 }
 
 
@@ -512,8 +525,12 @@ Value *primitiveCons(Value *args)
 
     wrapper = makeNull();
     consCell = makeNull();
-    consCell = cons(b, consCell);
-    consCell = cons(a, consCell);
+    if (b->type != NULL_TYPE) {
+      consCell = cons(b, consCell);
+    }
+    if (a->type != NULL_TYPE) {
+      consCell = cons(a, consCell);
+    }
     consCell = cons(consCell, wrapper);
 
     return(consCell);
