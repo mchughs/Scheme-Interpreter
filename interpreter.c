@@ -19,11 +19,18 @@ Value* evalLetStar (Value* args, Frame* frame);
 Value* evalEach    (Value* args, Frame* frame);
 Value* apply       (Value* function, Value* args);
 void bind(char *name, Value *(*function)(struct Value *), Frame *frame);
-Value *primitiveAdd(Value *args);
-Value *primitiveNull(Value *args);
-Value *primitiveCar(Value *args);
-Value *primitiveCdr(Value *args);
-Value *primitiveCons(Value *args);
+Value *primitiveAdd    (Value *args);
+Value *primitiveNull   (Value *args);
+Value *primitiveCar    (Value *args);
+Value *primitiveCdr    (Value *args);
+Value *primitiveCons   (Value *args);
+Value *primitiveTimes  (Value *args);
+Value *primitiveMinus  (Value *args);
+Value *primitiveDivide (Value *args);
+Value *primitiveModulo (Value *args);
+Value *primitiveGreater(Value *args);
+Value *primitiveLess   (Value *args);
+Value *primitiveEqual  (Value *args);
 
 void evaluationError();
 
@@ -40,11 +47,18 @@ void interpret(Value *tree)
   bind("car"  ,primitiveCar ,topFrame);
   bind("cdr"  ,primitiveCdr ,topFrame);
   bind("cons" ,primitiveCons,topFrame);
+  bind("*"    ,primitiveTimes,topFrame);
+  bind("-"    ,primitiveMinus,topFrame);
+  bind("/"    ,primitiveDivide,topFrame);
+  bind("modulo",primitiveModulo,topFrame);
+  bind(">"    ,primitiveGreater,topFrame);
+  bind("="    ,primitiveEqual,topFrame);
+  bind("<"    ,primitiveLess,topFrame);
 
-/*
+
   printInput(tree); // Prints parse tree for comparison //flag
   printf("--> \n");
-*/
+
 
   Value* evaluated_tree = talloc(sizeof(Value));
   // Increments through and evaluates every S-exp
@@ -257,14 +271,17 @@ Value* evalLet(Value* args, Frame* frame)
 
 Value* evalLetStar (Value* args, Frame* frame)
 {
+  /*
   Value* result = talloc(sizeof(Value));
   while (args->type != NULL_TYPE) {
     Frame* new_frame = talloc(sizeof(Frame));
     new_frame->parent = frame;
-    result = evalLet(args, new_frame);
+    args = cons(car(car(args)), cdr(args));
+    args = evalLet(car(car(args)), new_frame);
     frame = new_frame;
     args = cdr(args);
   }
+  */
   return(args);
 }
 
@@ -424,7 +441,7 @@ Value *primitiveAdd(Value *args)
          result->type = DOUBLE_TYPE;
          result->d = dsum;
          return (result);
-     } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+     } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == INT_TYPE) {
          d1 = car(args)->d;
          int2 = car(cdr(args))->i;
          dsum = d1 + int2;
@@ -547,6 +564,313 @@ Value *primitiveCons(Value *args)
     evaluationError();
   }
   return(args); //error if this step is reached
+}
+
+
+Value *primitiveTimes(Value *args)
+{
+  double product = 1;
+  Value* result = talloc(sizeof(Value));
+  result->type = DOUBLE_TYPE;
+  while (args->type != NULL_TYPE) {
+    if (car(args)->type == INT_TYPE) {
+      product = (double)car(args)->i * product;
+    } else if (car(args)->type == DOUBLE_TYPE) {
+      product = car(args)->d * product;
+    } else {
+      printf("* given non number input\n");
+      evaluationError();
+    }
+    args = cdr(args);
+  }
+  result->d = product;
+  return(result);
+}
+
+Value *primitiveMinus(Value *args)
+{
+// check that args has length 2 and car(args), car(cdr(args)) args are numerical
+if (length(args) == 2) {
+  Value* result = talloc(sizeof(Value));
+  int int1;
+  int int2;
+  int intsum;
+  double d1;
+  double d2;
+  double dsum;
+
+    if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+      int1 = car(args)->i;
+      int2 = car(cdr(args))->i;
+      intsum = int1 - int2;
+      result->type = INT_TYPE;
+      result->i =  intsum;
+      return (result);
+    } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        int1 = car(args)->i;
+        d2 = car(cdr(args))->d;
+        dsum = int1 - d2;
+        result->type = DOUBLE_TYPE;
+        result->d = dsum;
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == INT_TYPE) {
+        d1 = car(args)->d;
+        int2 = car(cdr(args))->i;
+        dsum = d1 - int2;
+        result->type = DOUBLE_TYPE;
+        result->d = dsum;
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        d1 = car(args)->d;
+        d2 = car(cdr(args))->d;
+        dsum = d1 - d2;
+        result->type = DOUBLE_TYPE;
+        result->d = dsum;
+        return(result);
+    } else {
+      printf("- function not given numbers\n");
+      evaluationError();
+    }
+  } else {
+    printf("- function not given 2 arguments to subtract\n");
+    evaluationError();
+  }
+  return(args); //error if this step is reached
+}
+
+
+Value *primitiveDivide(Value *args)
+{
+  if (length(args) == 2) {
+    Value* result = talloc(sizeof(Value));
+    if (car(cdr(args))->i == 0) {
+      printf("Don't divide by 0\n");
+      evaluationError();
+    }
+    if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+      if ((car(args)->i % car(cdr(args))->i) == 0) { //checks for even division
+        result->i = car(args)->i / car(cdr(args))->i;
+        result->type = INT_TYPE;
+      } else {
+        result->d = car(args)->i / (double)car(cdr(args))->i;
+        result->type = DOUBLE_TYPE;
+      }
+      return(result);
+    } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+      result->d = car(args)->i / car(cdr(args))->d;
+      result->type = DOUBLE_TYPE;
+      return(result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == INT_TYPE) {
+      result->d = car(args)->d / car(cdr(args))->i;
+      result->type = DOUBLE_TYPE;
+      return(result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+      result->d = car(args)->d / car(cdr(args))->d;
+      result->type = DOUBLE_TYPE;
+      return(result);
+    } else {
+      printf("divide function not given numbers\n");
+      evaluationError();
+    }
+  } else {
+    printf("too many/few args for divide \n");
+    evaluationError();
+  }
+  return(args);
+}
+
+
+Value *primitiveModulo(Value *args)
+{
+  if (length(args) == 2) {
+    if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+      Value* result = talloc(sizeof(Value));
+      result->type = INT_TYPE;
+      result->i = car(args)->i % car(cdr(args))->i;
+      if (result->i < 0) {
+        result->i = result->i + car(cdr(args))->i;
+      }
+      return(result);
+    } else {
+      printf("modulo function not given integers\n");
+      evaluationError();
+    }
+  } else {
+    printf("too many/few args for modulo \n");
+    evaluationError();
+  }
+  return(args);
+}
+
+
+Value *primitiveGreater(Value *args)
+{
+  Value* result = talloc(sizeof(Value));
+  result->type = BOOL_TYPE;
+  int int1;
+  int int2;
+  double d1;
+  double d2;
+  if (length(args) == 2) {
+    if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+      int1 = car(args)->i;
+      int2 = car(cdr(args))->i;
+      if (int1 > int2) {
+        result->i = 1;
+      } else {
+        result->i = 0;
+      }
+      return (result);
+    } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        int1 = car(args)->i;
+        d2 = car(cdr(args))->d;
+        if (int1 > d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == INT_TYPE) {
+        d1 = car(args)->d;
+        int2 = car(cdr(args))->i;
+        if (d1 > int2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        d1 = car(args)->d;
+        d2 = car(cdr(args))->d;
+        if (d1 > d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return(result);
+    } else {
+      printf("> function not given numbers\n");
+      evaluationError();
+    }
+  } else {
+    printf("too many/few args for > \n");
+    evaluationError();
+  }
+  return(args);
+}
+
+
+Value *primitiveLess(Value *args)
+{
+  if (length(args) == 2) {
+    Value* result = talloc(sizeof(Value));
+    result->type = BOOL_TYPE;
+    int int1;
+    int int2;
+    double d1;
+    double d2;
+    if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+      int1 = car(args)->i;
+      int2 = car(cdr(args))->i;
+      if (int1 < int2) {
+        result->i = 1;
+      } else {
+        result->i = 0;
+      }
+      return (result);
+    } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        int1 = car(args)->i;
+        d2 = car(cdr(args))->d;
+        if (int1 < d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == INT_TYPE) {
+        d1 = car(args)->d;
+        int2 = car(cdr(args))->i;
+        if (d1 < int2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        d1 = car(args)->d;
+        d2 = car(cdr(args))->d;
+        if (d1 < d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return(result);
+    } else {
+      printf("< function not given numbers\n");
+      evaluationError();
+    }
+  } else {
+    printf("too many/few args for < \n");
+    evaluationError();
+  }
+  return(args);
+}
+
+
+Value *primitiveEqual(Value *args)
+{
+  if (length(args) == 2) {
+    Value* result = talloc(sizeof(Value));
+    result->type = BOOL_TYPE;
+    int int1;
+    int int2;
+    double d1;
+    double d2;
+    if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+      int1 = car(args)->i;
+      int2 = car(cdr(args))->i;
+      if (int1 == int2) {
+        result->i = 1;
+      } else {
+        result->i = 0;
+      }
+      return (result);
+    } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        int1 = car(args)->i;
+        d2 = car(cdr(args))->d;
+        if (int1 == d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == INT_TYPE) {
+        d1 = car(args)->d;
+        int2 = car(cdr(args))->i;
+        if (d1 == int2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        d1 = car(args)->d;
+        d2 = car(cdr(args))->d;
+        if (d1 == d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return(result);
+    } else {
+      printf("= function not given numbers\n");
+      evaluationError();
+    }
+  } else {
+    printf("too many/few args for = \n");
+    evaluationError();
+  }
+  return(args);
 }
 
 
