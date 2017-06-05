@@ -123,10 +123,9 @@ void printTree(Value *tree)
       if (car(tree)->type != CONS_TYPE) {
         displayValue(car(tree)); // display the value of the cell
 
-        if (cdr(tree)->type != NULL_TYPE && cdr(cdr(tree))->type == NULL_TYPE) {
+        if (cdr(tree)->type == CONS_TYPE && cdr(cdr(tree))->type == NULL_TYPE) {
           printf(". ");
         }
-
       } else {
         printf("(");
         printTree(car(tree)); // recursively print from perspective of the nested list
@@ -180,6 +179,13 @@ void displayValue(Value *list)
   case PTR_TYPE:
       printf("FLAG\n");
       printf("%p ", list->p);
+      break;
+  case CLOSURE_TYPE:
+      //displayValue(list->cl.paramNames);
+      //displayValue(list->cl.functionCode);
+      break;
+  case PRIMITIVE_TYPE:
+      printf("primitive func\n");
       break;
   }
 }

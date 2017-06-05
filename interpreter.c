@@ -16,6 +16,12 @@ Value* evalLet     (Value* args, Frame* frame);
 void   evalDefine  (Value* args, Frame* frame);
 Value* evalLambda  (Value* args, Frame* frame);
 Value* evalLetStar (Value* args, Frame* frame);
+Value* evalLetRec  (Value* args, Frame* frame);
+void   evalSet     (Value* args, Frame* frame);
+Value* evalBegin   (Value* args, Frame* frame);
+Value* evalCond    (Value* args, Frame* frame);
+Value* evalAnd    (Value* args, Frame* frame);
+Value* evalOr    (Value* args, Frame* frame);
 Value* evalEach    (Value* args, Frame* frame);
 Value* apply       (Value* function, Value* args);
 void bind(char *name, Value *(*function)(struct Value *), Frame *frame);
@@ -31,6 +37,9 @@ Value *primitiveModulo (Value *args);
 Value *primitiveGreater(Value *args);
 Value *primitiveLess   (Value *args);
 Value *primitiveEqual  (Value *args);
+Value *primitiveLessE  (Value *args);
+Value *primitiveGreaterE(Value *args);
+Value *primitiveEq     (Value *args);
 
 void evaluationError();
 
@@ -54,11 +63,14 @@ void interpret(Value *tree)
   bind(">"    ,primitiveGreater,topFrame);
   bind("="    ,primitiveEqual,topFrame);
   bind("<"    ,primitiveLess,topFrame);
+  bind("<="   ,primitiveLessE,topFrame); //optional
+  bind(">="   ,primitiveGreaterE,topFrame); //optional
+  bind("eq?"  ,primitiveEq,topFrame); //optional
 
-
+  /*
   printInput(tree); // Prints parse tree for comparison //flag
   printf("--> \n");
-
+  */
 
   Value* evaluated_tree = talloc(sizeof(Value));
   // Increments through and evaluates every S-exp
@@ -66,7 +78,9 @@ void interpret(Value *tree)
     evaluated_tree = eval(car(tree), topFrame);
     printTree(evaluated_tree);
     // to print the proper spacing
-    printf("\n");
+    if (evaluated_tree->type != VOID_TYPE) {
+      printf("\n");
+    }
     tree = cdr(tree);
   }
 
@@ -166,6 +180,36 @@ Value *eval(Value *tree, Frame *frame)
             return(result);
         }
 
+        else if (!strcmp(first->s,"letrec")) {
+            Value* result = evalLetRec(args,frame); // call helper
+            return(result);
+        }
+
+        else if (!strcmp(first->s,"set!")) {
+            evalSet(args,frame); // call helper
+            args->type = VOID_TYPE; // to prevent printing
+            return(args);
+        }
+
+        else if (!strcmp(first->s,"begin")) {
+            Value* result = evalBegin(args,frame); // call helper
+            return(result);
+        }
+
+        else if (!strcmp(first->s,"cond")) {
+            Value* result = evalCond(args,frame); // call helper
+            return(result);
+        }
+
+        else if (!strcmp(first->s,"and")) {
+            Value* result = evalAnd(args,frame); // call helper
+            return(result);
+        }
+
+        else if (!strcmp(first->s,"or")) {
+            Value* result = evalOr(args,frame); // call helper
+            return(result);
+        }
 
         else {
            // If not a special form, evaluate the first, evaluate the args, then
@@ -215,13 +259,12 @@ Value* lookUpSymbol(Value* tree, Frame* frame)
     }
 
   }
-
   printf("Variable unassigned.\n"); // If the symbol is never found throw error
   evaluationError();
   return(tree);
 }
 
-
+// eval all bindings with passed in frame
 Value* evalLet(Value* args, Frame* frame)
 {
   Frame* new_frame = talloc(sizeof(Frame));
@@ -252,7 +295,7 @@ Value* evalLet(Value* args, Frame* frame)
       evaluationError();
     }
 
-    val = eval(expr ,frame);
+    val = eval(expr ,frame); // eval using the passed in frame
 
     var_val = cons(var,val); // car = symbol type, cdr = w/e type
 
@@ -269,20 +312,150 @@ Value* evalLet(Value* args, Frame* frame)
 }
 
 
+
+// eval all bindings with chain of frames
 Value* evalLetStar (Value* args, Frame* frame)
 {
-  /*
-  Value* result = talloc(sizeof(Value));
-  while (args->type != NULL_TYPE) {
-    Frame* new_frame = talloc(sizeof(Frame));
-    new_frame->parent = frame;
-    args = cons(car(car(args)), cdr(args));
-    args = evalLet(car(car(args)), new_frame);
-    frame = new_frame;
-    args = cdr(args);
+  Value* bindings = talloc(sizeof(Value));
+  bindings = car(args); // according to let* structure
+
+  Value* body = talloc(sizeof(Value));
+  body = car(cdr(args));
+
+  Value* bindingsList = talloc(sizeof(Value));
+  bindingsList = makeNull(); // head of linked list of bindings in the new_frame
+
+  Frame* curr = talloc(sizeof(Frame));
+  curr->parent = frame;
+
+  while (bindings->type != NULL_TYPE) {
+
+    Value* val = talloc(sizeof(Value));
+    Value* expr = talloc(sizeof(Value));
+    Value* var = talloc(sizeof(Value));
+    Value* var_val = talloc(sizeof(Value));
+
+    expr = car(cdr(car(bindings))); // that's just what it is
+
+    if (car(car(bindings))->type == SYMBOL_TYPE) {
+      var = car(car(bindings));
+    } else {
+      printf("Let* variable not a symbol.\n");
+      evaluationError();
+    }
+
+    val = eval(expr,frame); // eval using the passed in frame
+
+    var_val = cons(var,val); // car = symbol type, cdr = w/e type
+
+    bindingsList = cons(var_val, bindingsList); // add on a symbol-value pair to linked list
+    bindings = cdr(bindings);
+
+    curr->bindings = bindingsList;
+    frame = curr; // saves the results in the frame to then evaluate on the next pass through
   }
-  */
-  return(args);
+
+  Value* tree = talloc(sizeof(Value));
+  tree = eval(body, curr); // evalutes using the last frame in the loop
+
+  return(tree); // return the evaluation of the body given the new_frame
+}
+
+
+// bind to dummy value first in new frame then evaluate later using new frame
+Value* evalLetRec(Value* args, Frame* frame)
+{
+  Frame* new_frame = talloc(sizeof(Frame));
+  new_frame->parent = frame; // parent is the passed in frame.
+
+  Value* bindings = talloc(sizeof(Value));
+  bindings = car(args); // according to let structure
+
+  Value* body = talloc(sizeof(Value));
+  body = car(cdr(args));
+
+  Value* bindingsList = talloc(sizeof(Value));
+  bindingsList = makeNull(); // head of linked list of bindings in the new_frame
+
+  while (bindings->type != NULL_TYPE) { // binds the var to a dummy
+    Value* dummy = talloc(sizeof(Value));
+    Value* var = talloc(sizeof(Value));
+    Value* var_dummy = talloc(sizeof(Value));
+
+    if (car(car(bindings))->type == SYMBOL_TYPE) {
+      var = car(car(bindings));
+    } else {
+      printf("Letrec variable not a symbol.\n");
+      evaluationError();
+    }
+
+    var_dummy = cons(var,dummy);
+    bindingsList = cons(var_dummy, bindingsList); // add on a symbol-value pair to linked list
+    bindings = cdr(bindings);
+  }
+  new_frame->bindings = bindingsList;
+
+  bindings = car(args); // reset the bindings back to the beginning
+
+  Value* temp_bindings = talloc(sizeof(Value));
+  temp_bindings = bindingsList;
+
+  // loops through and replaces the dummys with the actual value
+  while (temp_bindings->type != NULL_TYPE) {
+    Value* expr = talloc(sizeof(Value));
+    Value* val = talloc(sizeof(Value));
+    expr = car(cdr(car(bindings)));
+    val = eval(expr, new_frame); // evals using the bindings with all the var names
+    cdr(car(temp_bindings))->type = val->type;
+    switch (val->type) {
+      case INT_TYPE:
+        cdr(car(temp_bindings))->i = val->i;
+        break;
+      case DOUBLE_TYPE:
+        cdr(car(temp_bindings))->d = val->d;
+        break;
+      case STR_TYPE:
+        cdr(car(temp_bindings))->s = val->s;
+        break;
+      case VOID_TYPE:
+        break;
+      case CLOSURE_TYPE:
+        cdr(car(temp_bindings))->cl = val->cl;
+        break;
+      case BOOL_TYPE:
+        cdr(car(temp_bindings))->cl = val->cl;
+        break;
+      case NULL_TYPE:
+        printf("letrec val error\n");
+        evaluationError();
+      case OPEN_TYPE:
+        printf("letrec val error\n");
+        evaluationError();
+      case CLOSE_TYPE:
+        printf("letrec val error\n");
+        evaluationError();
+      case PTR_TYPE:
+        printf("letrec val error\n");
+        evaluationError();
+      case SYMBOL_TYPE:
+        cdr(car(temp_bindings))->s = val->s;
+        break;
+      case PRIMITIVE_TYPE:
+        printf("letrec val error\n");
+        evaluationError();
+      case CONS_TYPE:
+        printf("letrec val error\n");
+        evaluationError();
+    }
+    temp_bindings = cdr(temp_bindings);
+    bindings = cdr(bindings);
+  }
+
+  new_frame->bindings = bindingsList;
+  Value* tree = talloc(sizeof(Value));
+  tree = eval(body, new_frame);
+
+  return(tree); // return the evaluation of the body given the new_frame
 }
 
 
@@ -310,6 +483,82 @@ Value* evalIf(Value* args, Frame* frame)
   return(result);
 }
 
+
+Value* evalCond(Value* args, Frame* frame)
+{
+  Value* result = talloc(sizeof(Value));
+  result->type = VOID_TYPE;
+  if (length(args) == 0) {
+    return(result);
+  }
+  while (args->type != NULL_TYPE) {
+
+    Value* clause =  talloc(sizeof(Value));
+    Value* test =  talloc(sizeof(Value));
+    Value* expr =  talloc(sizeof(Value));
+
+    clause = car(args);
+
+    if (length(clause) != 2) {
+      printf("conditional clause of improper form\n");
+      evaluationError();
+    } else {
+      test = car(clause);
+      expr = car(cdr(clause));
+    }
+
+    if (test->type == SYMBOL_TYPE && !strcmp(test->s,"else")) {
+      result = eval(expr, frame);
+    } else {
+      int bool_val = eval(test, frame)->i; //assumes we're given a boolean
+      if (bool_val) {
+        result = eval(expr, frame);
+        break;
+      }
+    }
+    args = cdr(args);
+  }
+
+  return(result);
+}
+
+
+Value* evalAnd (Value* args, Frame* frame)
+{
+  Value* result = talloc(sizeof(Value));
+  while (args->type != NULL_TYPE) {
+    Value* test = talloc(sizeof(Value));
+    test = car(args);
+    int bool_val = eval(test,frame)->i; // assumes a boolean
+    result->i = bool_val;
+    result->type = BOOL_TYPE;
+    if (!bool_val) { //bool_val == #f
+      break;
+    }
+    args = cdr(args);
+  }
+  return(result);
+}
+
+
+Value* evalOr (Value* args, Frame* frame)
+{
+  Value* result = talloc(sizeof(Value));
+  while (args->type != NULL_TYPE) {
+    Value* test = talloc(sizeof(Value));
+    test = car(args);
+    int bool_val = eval(test,frame)->i; // assumes a boolean
+    result->i = bool_val;
+    result->type = BOOL_TYPE;
+    if (bool_val) { //bool_val == #t
+      break;
+    }
+    args = cdr(args);
+  }
+  return(result);
+}
+
+
 void evalDefine(Value* args, Frame* frame)
 {
   if (length(args) != 2) {
@@ -322,32 +571,149 @@ void evalDefine(Value* args, Frame* frame)
 
     var = car(args); // name of the thing being defined
     val = eval(car(cdr(args)), frame); // value associated to the name
+
     var_val = cons(var,val);
     topFrame->bindings = cons(var_val, topFrame->bindings);
   }
   return;
 }
 
+
+void evalSet (Value* args, Frame* frame)
+{
+  if (length(args) != 2) {
+    printf("%i length of set! args\n", length(args));
+    printf("Too few/many args for set!\n");
+    evaluationError();
+  } else {
+    char* symbol = talloc(sizeof(Value));
+    Value* val = talloc(sizeof(Value));
+    Value* var_val = talloc(sizeof(Value));
+
+    if (car(args)->type == SYMBOL_TYPE) {
+      symbol = car(args)->s; // name of the thing being set!
+    } else {
+      printf("set! not given var to define\n");
+      evaluationError();
+    }
+
+    val = eval(car(cdr(args)), frame); // value we're trying to bind
+
+    int flag = 1;
+    while (flag) { // increment through the frames
+
+      Value* temp_bindings = talloc(sizeof(Value));
+      temp_bindings = frame->bindings;
+
+      while (temp_bindings->type != NULL_TYPE) { // increment through the list of bindings
+        char* var = talloc(sizeof(char));
+        Value* var_val = talloc(sizeof(Value));
+
+        var_val = car(temp_bindings);
+        var = car(var_val)->s; // variable name
+
+        if (!strcmp(symbol, var)) { // if the symbol is the same as the var
+          cdr(var_val)->type = val->type;
+          switch (val->type) {
+            case INT_TYPE:
+              cdr(car(temp_bindings))->i = val->i;
+              break;
+            case DOUBLE_TYPE:
+              cdr(car(temp_bindings))->d = val->d;
+              break;
+            case STR_TYPE:
+              cdr(car(temp_bindings))->s = val->s;
+              break;
+            case VOID_TYPE:
+              break;
+            case CLOSURE_TYPE:
+              cdr(car(temp_bindings))->cl = val->cl;
+              break;
+            case BOOL_TYPE:
+              cdr(car(temp_bindings))->i = val->i;
+              break;
+            case NULL_TYPE:
+              printf("set! val error\n");
+              evaluationError();
+            case OPEN_TYPE:
+              printf("set! val error\n");
+              evaluationError();
+            case CLOSE_TYPE:
+              printf("set! val error\n");
+              evaluationError();
+            case PTR_TYPE:
+              printf("set! val error\n");
+              evaluationError();
+            case SYMBOL_TYPE:
+              cdr(car(temp_bindings))->s = val->s;
+              break;
+            case PRIMITIVE_TYPE:
+              printf("set! val error\n");
+              evaluationError();
+            case CONS_TYPE:
+              printf("set! val error\n");
+              evaluationError();
+          }
+          flag = 0;
+          break;
+        }
+        temp_bindings = cdr(temp_bindings);
+      }
+      if (flag == 0) {
+        break;
+      }
+      if (frame->parent != NULL) { // Conditional to break from the loop
+        frame = frame->parent;
+      } else {
+        printf("Set cannot find variable.\n"); // If the symbol is never found throw error
+        evaluationError();
+      }
+    }
+  }
+  return;
+}
+
+
 Value* evalLambda(Value* args, Frame* frame)
 {
   Value* closure = talloc(sizeof(Value));
   closure->type = CLOSURE_TYPE;
 
-  if (length(args) != 2) {
-    printf("Too few/many args for lambda\n");
+  if (length(args) < 2) {
+    printf("Too few args for lambda\n");
     evaluationError();
   } else {
     Value* params = talloc(sizeof(Value));
     Value* body = talloc(sizeof(Value));
 
     params = car(args);
-    body = car(cdr(args));
+    body = car(cdr(args)); // assumes single body lambda which reduces some functionality
+
+    //body = makeNull(); //would have to be used in multi-body lambda
+    //body = cons(cdr(args),body);
 
     closure->cl.paramNames = params;
     closure->cl.functionCode = body;
     closure->cl.frame = frame;
   }
   return(closure);
+}
+
+
+Value* evalBegin(Value* args, Frame* frame) //make changes to let and lambda flag
+{
+  Value* result = talloc(sizeof(Value));
+
+  if (length(args) == 0) {
+    result->type = VOID_TYPE;
+    return(result);
+  }
+
+  while (args->type != NULL_TYPE) {
+    result = eval(car(args), frame);
+    args = cdr(args);
+  }
+  return(result);
 }
 
 
@@ -387,7 +753,20 @@ Value* apply (Value* function, Value* args)
       args = cdr(args);
     }
 
-    Value* tree = talloc(sizeof(tree));
+    Value* tree = talloc(sizeof(Value));
+
+    /*
+    // allows multi-body lambda's however I couldn't get the frame chaining working
+    tree = makeNull();
+    Value* tempCode = talloc(sizeof(Value));
+    tempCode = function->cl.functionCode;
+    while (tempCode != NULL) {
+      tree = cons(eval(car(tempCode), frame), tree);
+      //tree = eval(car(tempCode),frame);
+      tempCode = cdr(tempCode);
+    }
+    */
+
     tree = eval(function->cl.functionCode, frame);
     return(tree);
 
@@ -817,6 +1196,120 @@ Value *primitiveLess(Value *args)
 }
 
 
+Value *primitiveLessE (Value *args)
+{
+  if (length(args) == 2) {
+    Value* result = talloc(sizeof(Value));
+    result->type = BOOL_TYPE;
+    int int1;
+    int int2;
+    double d1;
+    double d2;
+    if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+      int1 = car(args)->i;
+      int2 = car(cdr(args))->i;
+      if (int1 <= int2) {
+        result->i = 1;
+      } else {
+        result->i = 0;
+      }
+      return (result);
+    } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        int1 = car(args)->i;
+        d2 = car(cdr(args))->d;
+        if (int1 <= d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == INT_TYPE) {
+        d1 = car(args)->d;
+        int2 = car(cdr(args))->i;
+        if (d1 <= int2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        d1 = car(args)->d;
+        d2 = car(cdr(args))->d;
+        if (d1 <= d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return(result);
+    } else {
+      printf("<= function not given numbers\n");
+      evaluationError();
+    }
+  } else {
+    printf("too many/few args for <= \n");
+    evaluationError();
+  }
+  return(args);
+}
+
+
+Value *primitiveGreaterE (Value *args)
+{
+  if (length(args) == 2) {
+    Value* result = talloc(sizeof(Value));
+    result->type = BOOL_TYPE;
+    int int1;
+    int int2;
+    double d1;
+    double d2;
+    if (car(args)->type == INT_TYPE && car(cdr(args))->type == INT_TYPE) {
+      int1 = car(args)->i;
+      int2 = car(cdr(args))->i;
+      if (int1 >= int2) {
+        result->i = 1;
+      } else {
+        result->i = 0;
+      }
+      return (result);
+    } else if (car(args)->type == INT_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        int1 = car(args)->i;
+        d2 = car(cdr(args))->d;
+        if (int1 >= d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == INT_TYPE) {
+        d1 = car(args)->d;
+        int2 = car(cdr(args))->i;
+        if (d1 >= int2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return (result);
+    } else if (car(args)->type == DOUBLE_TYPE && car(cdr(args))->type == DOUBLE_TYPE) {
+        d1 = car(args)->d;
+        d2 = car(cdr(args))->d;
+        if (d1 >= d2) {
+          result->i = 1;
+        } else {
+          result->i = 0;
+        }
+        return(result);
+    } else {
+      printf(">= function not given numbers\n");
+      evaluationError();
+    }
+  } else {
+    printf("too many/few args for >= \n");
+    evaluationError();
+  }
+  return(args);
+}
+
+
 Value *primitiveEqual(Value *args)
 {
   if (length(args) == 2) {
@@ -868,6 +1361,29 @@ Value *primitiveEqual(Value *args)
     }
   } else {
     printf("too many/few args for = \n");
+    evaluationError();
+  }
+  return(args);
+}
+
+
+Value *primitiveEq(Value *args)
+{
+  if (length(args) == 2) {
+    Value* result = talloc(sizeof(Value));
+    void*  ptr1   = talloc(sizeof(void*));
+    void*  ptr2   = talloc(sizeof(void*));
+    result->type = BOOL_TYPE;
+    ptr1 = &car(args)->s;
+    ptr2 = &car(cdr(args))->s;
+    if (ptr1 == ptr2) {
+      result->i = 1;
+    } else {
+      result->i = 0;
+    }
+    return(result);
+  } else {
+    printf("too many/few args for eq?\n");
     evaluationError();
   }
   return(args);
