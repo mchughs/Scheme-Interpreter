@@ -1,0 +1,5 @@
+(null? (quote (1 2)))
+(null? "a")
+(null? ())
+(null? (quote ("a")))
+(null? (quote ()))

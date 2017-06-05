@@ -1,0 +1,11 @@
+(>= 2 3)
+(<= 3 3)
+
+(define x (quote (2 3)))
+(define y (quote (2 3)))
+(eq? x y)
+(define y x)
+(eq? x y)
+(eq? car car)
+(eq? 1 1)
+(eq? "a" "a")

@@ -1,0 +1,4 @@
+(car (quote (5 6)))
+(car (quote (() #f)))
+(car (quote ((1 2) (3 4))))
+(car (car (quote ("a" "b"))))

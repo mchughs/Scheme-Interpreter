@@ -1,0 +1,6 @@
+(define not (lambda (bool) (if bool #f #t)))
+
+(define state #f)
+state
+(set! state (not state))
+state

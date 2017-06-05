@@ -1,0 +1,4 @@
+(cons (quote 1) (quote 2))
+(cons 1 2)
+(car (cons 1 2))
+(cdr (cons 1 2))

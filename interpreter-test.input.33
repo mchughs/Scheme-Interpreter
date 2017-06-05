@@ -1,0 +1,11 @@
+(cond ((> 3 4) "greater than")
+      ((< 3 4) "less than")
+      (else "equal"))
+
+(cond ((> 3 3) "greater than")
+      ((< 3 3) "less than")
+      (else "equal"))
+
+(cond )
+
+(cond (#f 1))

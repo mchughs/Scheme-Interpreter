@@ -1,0 +1,7 @@
+(cdr (quote (1 2)))
+(cdr (cdr (quote (1 2))))
+(cdr (quote (4 5 6)))
+(cdr (cdr (quote (4 5 6))))
+(cdr (cdr (cdr (quote (4 5 6)))))
+(cdr (quote ()))
+(cdr "a")
